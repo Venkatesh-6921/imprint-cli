@@ -37,6 +37,24 @@ imp restore https://github.com/your-username/my-imprint-config.git
 
 ---
 
+## 📺 Demo
+
+See Imprint v2 in action. You can try restoring a sample "Demo Environment" directly from GitHub:
+
+```bash
+# Preview restoring a sample environment
+imp restore https://github.com/Venkatesh-6921/imprint-demo.git --dry-run
+```
+
+**What happens during restore?**
+1.  **🔍 Clone:** Retrieves the configuration repo from GitHub.
+2.  **📁 Dotfiles:** Symlinks `.zshrc`, `.tmux.conf`, etc., to your `$HOME`.
+3.  **🧩 Extensions:** Installs all listed VS Code extensions.
+4.  **📦 Packages:** Reinstalls your favorite `pip` and `npm` tools.
+5.  **✨ Finish:** Your environment is ready to use immediately.
+
+---
+
 ## 🛠️ Usage
 
 | Command | Action |
