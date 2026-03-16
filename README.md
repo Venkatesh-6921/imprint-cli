@@ -1,5 +1,7 @@
 # 🔏 Imprint v2
 
+![Imprint Demo](https://raw.githubusercontent.com/Venkatesh-6921/imprint-cli/main/demo.png)
+
 **Stamp your developer environment on any machine.**
 
 Imprint is a premium CLI tool inspired by the Gemini CLI experience. It allows you to snapshot your entire machine's developer setup — from dotfiles and VS Code extensions to global packages and shell configurations — and restore it perfectly on a new machine in seconds.
