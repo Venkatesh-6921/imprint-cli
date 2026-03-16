@@ -46,20 +46,22 @@ console = Console(theme=IMPRINT_THEME)
 # ── ASCII Logo ────────────────────────────────────────────────────────────────
 
 _LOGO_LINES = [
-    "  ___ __  __ ___  ___ ___ _  _ _____ ",
-    " |_ _|  \/  | _ \| _ \_ _| \| |_   _|",
-    "  | || |\/| |  _/|   /| || .` | | |  ",
-    " |___|_|  |_|_|  |_|_|___|_|\_| |_|  ",
+    r"  _____ __  __ _____  _____ _____ _   _ _______ ",
+    r" |_   _|  \/  |  __ \|  __ \_   _| \ | |__   __|",
+    r"   | | | \  / | |__) | |__) || | |  \| |  | |   ",
+    r"   | | | |\/| |  ___/|  _  / | | | . ` |  | |   ",
+    r"  _| |_| |  | | |    | | \ \_| |_| |\  |  | |   ",
+    r" |_____|_|  |_|_|    |_|  \_\______|_| \_|  |_|   ",
 ]
 
-_LOGO_COLORS = ["bright_green", "bright_green", "cyan", "bright_green"]
+_LOGO_COLORS = ["bright_green", "bright_green", "cyan", "cyan", "bright_green", "bright_green"]
 
 
 def print_logo() -> None:
     """Print the big IMPRINT ASCII logo with gradient colors."""
     console.print()
     for line, color in zip(_LOGO_LINES, _LOGO_COLORS):
-        console.print(f"[{color}]{line}[/{color}]")
+        console.print(f"[bold {color}]{line}[/bold {color}]")
     console.print()
 
 
