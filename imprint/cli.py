@@ -1,100 +1,99 @@
 """
-Imprint CLI entry point.
-All user-facing commands are defined here using Click.
+Imprint CLI v2 — Gemini CLI-style terminal experience.
 """
 
 from __future__ import annotations
 
 import click
-from rich.console import Console
+from rich.text import Text
 
 from imprint import __version__
 from imprint.config import ImprintConfig
+from imprint.utils.display import (
+    console,
+    print_logo,
+    print_tips,
+    print_status_bar,
+    print_command_header,
+    step_ok,
+    step_warn,
+    step_error,
+    step_info,
+    divider,
+)
 
-console = Console()
 
+# ── Root group ────────────────────────────────────────────────────────────────
 
-@click.group()
+@click.group(invoke_without_command=True)
 @click.version_option(version=__version__, prog_name="Imprint")
-def cli() -> None:
+@click.pass_context
+def cli(ctx: click.Context) -> None:
     """
+    \b
     🔏 Imprint — Stamp your developer environment on any machine.
 
-    Commands:\n
-      imp snapshot   Capture your current environment\n
-      imp restore    Restore your environment on a new machine\n
-      imp diff       See what has changed since your last snapshot\n
-      imp update     Snapshot + push in one command\n
+    \b
+    Commands:
+      imp snapshot   Capture your current environment
+      imp restore    Restore your environment on a new machine
+      imp diff       See what has changed since your last snapshot
+      imp update     Snapshot + push in one command
       imp status     Show what Imprint is tracking
     """
+    if ctx.invoked_subcommand is None:
+        # No subcommand — show logo + tips (like `gemini` with no args)
+        print_logo()
+        print_tips()
+        print_status_bar(version=__version__)
 
+
+# ── snapshot ──────────────────────────────────────────────────────────────────
 
 @cli.command()
-@click.option(
-    "--no-push",
-    is_flag=True,
-    default=False,
-    help="Don't push to GitHub after snapshot",
-)
-@click.option(
-    "--include-vscode/--no-vscode",
-    default=True,
-    help="Include VS Code extensions",
-)
-@click.option(
-    "--include-packages/--no-packages",
-    default=True,
-    help="Include installed packages",
-)
+@click.option("--no-push", is_flag=True, default=False, help="Don't push to GitHub after snapshot")
+@click.option("--include-vscode/--no-vscode", default=True, help="Include VS Code extensions")
+@click.option("--include-packages/--no-packages", default=True, help="Include installed packages")
 def snapshot(no_push: bool, include_vscode: bool, include_packages: bool) -> None:
     """Capture your complete developer environment."""
     config = ImprintConfig.load()
 
-    # If pushing is enabled but no GitHub repo is configured, ask the user
     push = not no_push
     if push and not config.github_repo:
+        console.print()
         console.print(
-            "\n[bold yellow]🔗 No GitHub repository configured.[/bold yellow]"
+            "  [yellow]>[/yellow]  [bold]No GitHub repository configured.[/bold]"
         )
         console.print(
-            "   To push snapshots to GitHub, enter your repo URL below."
+            "      [dim]Create an empty private repo on GitHub first,[/dim]"
         )
         console.print(
-            "   [dim](Create an empty private repo on GitHub first,"
-            " e.g. https://github.com/you/my-imprint-config)[/dim]"
+            "      [dim]e.g.[/dim]  [cyan]https://github.com/you/my-imprint-config[/cyan]\n"
         )
         repo_url = click.prompt(
-            "\n  GitHub repo URL (leave empty to skip)",
+            "  GitHub repo URL (leave empty to skip)",
             default="",
             show_default=False,
         )
         if repo_url.strip():
             config.github_repo = repo_url.strip()
             config.save()
-            console.print(
-                f"[green]✅ Saved! Future snapshots will push to:"
-                f" {config.github_repo}[/green]\n"
-            )
+            step_ok("Saved!", f"Future snapshots → {config.github_repo}")
+            console.print()
         else:
             push = False
-            console.print(
-                "[dim]  Skipping GitHub push. You can set it later in"
-                " ~/.imprint/config.toml[/dim]\n"
-            )
+            step_warn("Skipping GitHub push.", "Set it later in ~/.imprint/config.toml")
+            console.print()
 
     from imprint.snapshot import run_snapshot
-
     run_snapshot(config, push=push)
 
 
+# ── restore ───────────────────────────────────────────────────────────────────
+
 @cli.command()
 @click.argument("source", required=False)
-@click.option(
-    "--dry-run",
-    is_flag=True,
-    default=False,
-    help="Show what would be restored without doing it",
-)
+@click.option("--dry-run", is_flag=True, default=False, help="Show what would be restored without doing it")
 def restore(source: str | None, dry_run: bool) -> None:
     """
     Restore your developer environment on a new machine.
@@ -104,66 +103,83 @@ def restore(source: str | None, dry_run: bool) -> None:
     """
     config = ImprintConfig.load()
     if dry_run:
-        console.print("[yellow]Dry run mode — no changes will be made.[/yellow]")
+        step_warn("Dry run mode — no changes will be made.")
+        console.print()
     from imprint.restore import run_restore
-
     run_restore(config, source=source)
 
+
+# ── diff ──────────────────────────────────────────────────────────────────────
 
 @cli.command()
 def diff() -> None:
     """Show what has changed since your last snapshot."""
     config = ImprintConfig.load()
     from imprint.diff import run_diff
-
     run_diff(config)
 
+
+# ── update ────────────────────────────────────────────────────────────────────
 
 @cli.command()
 def update() -> None:
     """Snapshot current state and push to GitHub."""
     config = ImprintConfig.load()
     from imprint.snapshot import run_snapshot
-
     run_snapshot(config, push=True)
-    console.print("[green]✅ Environment updated and pushed.[/green]")
+    console.print()
+    step_ok("Environment updated and pushed to GitHub.")
 
+
+# ── status ────────────────────────────────────────────────────────────────────
 
 @cli.command()
 def status() -> None:
     """Show what Imprint is currently tracking."""
     config = ImprintConfig.load()
     manifest_path = config.manifest_path
+
+    print_command_header("imp status", "Overview of tracked environment")
+
     if not manifest_path.exists():
-        console.print("[yellow]No snapshot found. Run 'imp snapshot' first.[/yellow]")
+        step_warn("No snapshot found.", "Run  imp snapshot  first.")
+        console.print()
         return
 
     from imprint.manifest import Manifest
+    m = Manifest.load(manifest_path)
 
-    manifest = Manifest.load(manifest_path)
-    console.print(f"\n[bold purple]🔏 Imprint Status[/bold purple]")
-    console.print(f"   Last snapshot:   {manifest.meta.get('snapshot_at', 'unknown')}")
-    console.print(f"   Machine:         {manifest.meta.get('hostname', 'unknown')}")
-    console.print(
-        f"   OS:              {manifest.meta.get('os', 'unknown')}"
-        f" {manifest.meta.get('os_version', '')}"
-    )
-    console.print(f"   Python:          {manifest.system.get('python_version', 'unknown')}")
-    console.print(f"   Node:            {manifest.system.get('node_version', 'N/A')}")
-    console.print(f"   Dotfiles:        {len(manifest.dotfiles)} files")
-    console.print(
-        f"   VS Code:         {len(manifest.vscode.get('extensions', []))} extensions"
-    )
     total_pkgs = sum(
         len(v.get("packages", v if isinstance(v, list) else []))
-        for v in manifest.packages.values()
+        for v in m.packages.values()
     )
-    console.print(f"   Packages:        {total_pkgs} total")
-    console.print(f"   Custom scripts:  {len(manifest.scripts)} files\n")
 
+    from rich.table import Table
+    table = Table(show_header=False, border_style="bright_black", padding=(0, 2), expand=False)
+    table.add_column("Key", style="dim", no_wrap=True)
+    table.add_column("Value", style="white")
+
+    table.add_row("Last snapshot",  m.meta.get("snapshot_at", "unknown"))
+    table.add_row("Machine",        m.meta.get("hostname", "unknown"))
+    table.add_row("OS",             f"{m.meta.get('os','?')} {m.meta.get('os_version','')}")
+    table.add_row("Python",         m.system.get("python_version", "unknown"))
+    table.add_row("Node",           m.system.get("node_version", "N/A"))
+    table.add_row("Dotfiles",       f"[bright_green]{len(m.dotfiles)}[/bright_green] files")
+    table.add_row("VS Code exts",   f"[bright_green]{len(m.vscode.get('extensions', []))}[/bright_green] extensions")
+    table.add_row("Packages",       f"[bright_green]{total_pkgs}[/bright_green] total")
+    table.add_row("Custom scripts", f"[bright_green]{len(m.scripts)}[/bright_green] files")
+
+    console.print(table)
+    console.print()
+    console.print(
+        "  [dim]Run[/dim]  [cyan]imp diff[/cyan]  [dim]to see what changed since this snapshot.[/dim]"
+    )
+    console.print()
+
+
+# ── entry point ───────────────────────────────────────────────────────────────
 
 def main() -> None:
-    """Main entry point for the CLI."""
     cli()
 
 

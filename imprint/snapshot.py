@@ -1,6 +1,6 @@
 """
 Snapshot — capture the current developer environment.
-Orchestrates all collectors, builds manifest, copies files, pushes to GitHub.
+Gemini CLI-style Rich output: live progress, styled panels.
 """
 
 from __future__ import annotations
@@ -9,8 +9,12 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
-from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.progress import (
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
 
 from imprint.collectors import (
     dotfiles as dotfiles_collector,
@@ -23,9 +27,15 @@ from imprint.collectors import (
 )
 from imprint.config import ImprintConfig
 from imprint.manifest import Manifest
+from imprint.utils.display import (
+    console,
+    divider,
+    print_command_header,
+    step_ok,
+    step_info,
+    step_error,
+)
 from imprint.utils.safety import filter_safe_files
-
-console = Console()
 
 
 def run_snapshot(config: ImprintConfig, push: bool = True) -> Path:
@@ -42,118 +52,125 @@ def run_snapshot(config: ImprintConfig, push: bool = True) -> Path:
     snapshot_dir = config.snapshots_dir / timestamp
     snapshot_dir.mkdir(parents=True, exist_ok=True)
 
-    console.print(
-        "\n[bold purple]⚡ Imprint Snapshot[/bold purple]"
-        " — Capturing your developer environment\n"
+    print_command_header(
+        "imp snapshot",
+        "Capturing your complete developer environment...",
     )
 
     manifest = Manifest()
     manifest.set_meta(timestamp)
 
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
+    # ── Collectors ────────────────────────────────────────────────────────────
+    progress = Progress(
+        SpinnerColumn(spinner_name="dots", style="bright_green"),
+        TextColumn("  [progress.description]{task.description}"),
+        TimeElapsedColumn(),
         console=console,
-    ) as progress:
+        transient=False,
+    )
 
+    with progress:
         # 1. System info
-        task = progress.add_task("📋  Detecting system info...", total=None)
+        t = progress.add_task("[dim]Detecting system info...[/dim]", total=None)
         manifest.system = system_collector.collect()
-        progress.update(task, description="[green]✓  System info[/green]")
+        progress.update(t, description="[bright_green]✓[/bright_green]  System info")
+        progress.stop_task(t)
 
         # 2. Dotfiles
-        task = progress.add_task("📁  Collecting dotfiles...", total=None)
-        found_dotfiles = dotfiles_collector.collect(config.home_dir)
-        safe_dotfiles = filter_safe_files(
-            found_dotfiles, config.imprintignore_path, config.home_dir
-        )
+        t = progress.add_task("[dim]Collecting dotfiles...[/dim]", total=None)
+        found = dotfiles_collector.collect(config.home_dir)
+        safe = filter_safe_files(found, config.imprintignore_path, config.home_dir)
         config.dotfiles_dir.mkdir(parents=True, exist_ok=True)
-        for src_path in safe_dotfiles:
-            dest = config.dotfiles_dir / src_path.name
-            shutil.copy2(src_path, dest)
-        manifest.dotfiles = [f.name for f in safe_dotfiles]
-        progress.update(
-            task,
-            description=f"[green]✓  Dotfiles ({len(safe_dotfiles)} files)[/green]",
-        )
+        for src in safe:
+            shutil.copy2(src, config.dotfiles_dir / src.name)
+        manifest.dotfiles = [f.name for f in safe]
+        progress.update(t, description=f"[bright_green]✓[/bright_green]  Dotfiles  [dim]({len(safe)} files)[/dim]")
+        progress.stop_task(t)
 
         # 3. VS Code
-        task = progress.add_task("🧩  Collecting VS Code extensions...", total=None)
+        t = progress.add_task("[dim]Collecting VS Code extensions...[/dim]", total=None)
         vscode_data = vscode_collector.collect()
         manifest.vscode = vscode_data
         if vscode_data.get("settings_path"):
-            settings_src = Path(vscode_data["settings_path"])
-            if settings_src.exists():
-                shutil.copy2(settings_src, config.dotfiles_dir / "vscode_settings.json")
-        progress.update(
-            task,
-            description=(
-                f"[green]✓  VS Code"
-                f" ({len(vscode_data.get('extensions', []))} extensions)[/green]"
-            ),
-        )
+            src_settings = Path(vscode_data["settings_path"])
+            if src_settings.exists():
+                shutil.copy2(src_settings, config.dotfiles_dir / "vscode_settings.json")
+        n_ext = len(vscode_data.get("extensions", []))
+        progress.update(t, description=f"[bright_green]✓[/bright_green]  VS Code  [dim]({n_ext} extensions)[/dim]")
+        progress.stop_task(t)
 
         # 4. Packages
-        task = progress.add_task("📦  Collecting installed packages...", total=None)
+        t = progress.add_task("[dim]Collecting installed packages...[/dim]", total=None)
         packages_data = packages_collector.collect()
         manifest.packages = packages_data
         total_pkgs = sum(
             len(v.get("packages", []) if isinstance(v, dict) else [])
             for v in packages_data.values()
         )
-        progress.update(
-            task,
-            description=f"[green]✓  Packages ({total_pkgs} total)[/green]",
-        )
+        progress.update(t, description=f"[bright_green]✓[/bright_green]  Packages  [dim]({total_pkgs} total)[/dim]")
+        progress.stop_task(t)
 
         # 5. Shell
-        task = progress.add_task("🐚  Detecting shell config...", total=None)
+        t = progress.add_task("[dim]Detecting shell config...[/dim]", total=None)
         shell_data = shell_collector.collect(config.home_dir)
         manifest.shell = shell_data
-        progress.update(
-            task,
-            description=f"[green]✓  Shell ({shell_data.get('type', 'unknown')})[/green]",
-        )
+        shell_type = shell_data.get("type", "unknown")
+        progress.update(t, description=f"[bright_green]✓[/bright_green]  Shell  [dim]({shell_type})[/dim]")
+        progress.stop_task(t)
 
         # 6. Git config
-        task = progress.add_task("🔧  Reading Git config...", total=None)
+        t = progress.add_task("[dim]Reading Git config...[/dim]", total=None)
         git_data = git_collector.collect(config.home_dir)
         manifest.git = git_data
-        progress.update(task, description="[green]✓  Git config[/green]")
+        progress.update(t, description="[bright_green]✓[/bright_green]  Git config")
+        progress.stop_task(t)
 
-        # 7. Custom scripts
-        task = progress.add_task("📜  Collecting ~/bin scripts...", total=None)
+        # 7. Scripts
+        t = progress.add_task("[dim]Collecting ~/bin scripts...[/dim]", total=None)
         bin_scripts = scripts_collector.collect(config.home_dir)
-        safe_scripts = filter_safe_files(
-            bin_scripts, config.imprintignore_path, config.home_dir
-        )
+        safe_scripts = filter_safe_files(bin_scripts, config.imprintignore_path, config.home_dir)
         config.scripts_dir.mkdir(parents=True, exist_ok=True)
-        for src_path in safe_scripts:
-            shutil.copy2(src_path, config.scripts_dir / src_path.name)
+        for src in safe_scripts:
+            shutil.copy2(src, config.scripts_dir / src.name)
         manifest.scripts = [f.name for f in safe_scripts]
-        progress.update(
-            task,
-            description=f"[green]✓  Scripts ({len(safe_scripts)} files)[/green]",
-        )
+        progress.update(t, description=f"[bright_green]✓[/bright_green]  Scripts  [dim]({len(safe_scripts)} files)[/dim]")
+        progress.stop_task(t)
 
-    # Save manifest
+    # ── Save manifest ─────────────────────────────────────────────────────────
     manifest.save(config.manifest_path)
     shutil.copy2(config.manifest_path, snapshot_dir / "environment.toml")
 
-    # Summary
+    # ── Summary ───────────────────────────────────────────────────────────────
     console.print()
-    console.print("[bold green]✅ Snapshot complete![/bold green]")
-    console.print(f"   Dotfiles:    {len(manifest.dotfiles)} files")
-    console.print(f"   VS Code:     {len(manifest.vscode.get('extensions', []))} extensions")
-    console.print(f"   Packages:    {total_pkgs} packages")
-    console.print(f"   Scripts:     {len(manifest.scripts)} custom scripts")
-    console.print(f"   Saved to:    {config.imprint_dir}")
+    divider("snapshot complete")
 
+    from rich.table import Table
+    table = Table(show_header=False, border_style="bright_black", padding=(0, 2), expand=False)
+    table.add_column("", style="dim", no_wrap=True)
+    table.add_column("", style="white")
+    table.add_row("Dotfiles",    f"[bright_green]{len(manifest.dotfiles)}[/bright_green] files")
+    table.add_row("VS Code",     f"[bright_green]{len(manifest.vscode.get('extensions', []))}[/bright_green] extensions")
+    table.add_row("Packages",    f"[bright_green]{total_pkgs}[/bright_green] total")
+    table.add_row("Scripts",     f"[bright_green]{len(manifest.scripts)}[/bright_green] custom scripts")
+    table.add_row("Saved to",    f"[dim]{config.imprint_dir}[/dim]")
+    console.print(table)
+
+    # ── GitHub push ───────────────────────────────────────────────────────────
     if push and config.github_repo:
-        console.print("\n[bold blue]📤 Pushing to GitHub...[/bold blue]")
-        from imprint.utils.git import push_to_github
+        console.print()
+        step_info("Pushing to GitHub...", config.github_repo)
+        try:
+            from imprint.utils.git import push_to_github
+            push_to_github(config.imprint_dir, config.github_repo)
+            step_ok("Pushed!", config.github_repo)
+        except Exception as e:
+            step_error("Push failed", str(e))
 
-        push_to_github(config.imprint_dir, config.github_repo)
-        console.print(f"[green]✓  Pushed to {config.github_repo}[/green]")
+    console.print()
+    console.print(
+        "  [bright_green]✓[/bright_green]  [bold]Snapshot complete![/bold]  "
+        "[dim]Run[/dim]  [cyan]imp diff[/cyan]  [dim]anytime to see what changed.[/dim]"
+    )
+    console.print()
 
     return snapshot_dir
