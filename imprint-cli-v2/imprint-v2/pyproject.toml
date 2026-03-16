@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "imprint-cli"
-version = "2.0.1"
+version = "2.0.0"
 description = "Stamp your developer environment on any machine"
 readme = "README.md"
 license = { text = "MIT" }

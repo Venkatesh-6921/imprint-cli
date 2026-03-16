@@ -1,0 +1,43 @@
+# .imprintignore — Never snapshot these files
+# Imprint will NEVER include these in any snapshot, regardless of configuration.
+# Format: one pattern per line, same as .gitignore
+
+# SSH keys and config — NEVER include
+.ssh/id_rsa
+.ssh/id_ed25519
+.ssh/id_ecdsa
+.ssh/*.pem
+.ssh/*.key
+
+# Tokens and secrets
+.env
+.env.*
+*.token
+*_token
+*secret*
+*password*
+*credential*
+*api_key*
+
+# GPG keys
+.gnupg/
+
+# Browser data
+.mozilla/
+.config/google-chrome/
+
+# Large data directories
+.npm/
+.cache/
+.local/share/
+node_modules/
+
+# AWS / Cloud credentials
+.aws/credentials
+.aws/config
+.gcloud/
+.kube/
+
+# Shell history (contains sensitive commands)
+.bash_history
+.zsh_history

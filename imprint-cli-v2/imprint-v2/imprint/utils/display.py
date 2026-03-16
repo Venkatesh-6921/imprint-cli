@@ -30,13 +30,6 @@ IMPRINT_THEME = Theme(
         "imp.remove":  "red",
         "imp.modify":  "yellow",
         "imp.head":    "bold magenta",
-        # Backward compatibility for old calls if any remain temporarily
-        "imprint.brand": "bold bright_green",
-        "imprint.success": "bright_green",
-        "imprint.warning": "yellow",
-        "imprint.error": "bold red",
-        "imprint.info": "cyan",
-        "imprint.dim": "dim",
     }
 )
 
@@ -46,12 +39,12 @@ console = Console(theme=IMPRINT_THEME)
 # ── ASCII Logo ────────────────────────────────────────────────────────────────
 
 _LOGO_LINES = [
-    r"  _____ __  __ _____  _____ _____ _   _ _______ ",
-    r" |_   _|  \/  |  __ \|  __ \_   _| \ | |__   __|",
-    r"   | | | \  / | |__) | |__) || | |  \| |  | |   ",
-    r"   | | | |\/| |  ___/|  _  / | | | . ` |  | |   ",
-    r"  _| |_| |  | | |    | | \ \_| |_| |\  |  | |   ",
-    r" |_____|_|  |_|_|    |_|  \_\______|_| \_|  |_|   ",
+    "  ██╗███╗   ███╗██████╗ ██████╗ ██╗███╗   ██╗████████╗",
+    "  ██║████╗ ████║██╔══██╗██╔══██╗██║████╗  ██║╚══██╔══╝",
+    "  ██║██╔████╔██║██████╔╝██████╔╝██║██╔██╗ ██║   ██║   ",
+    "  ██║██║╚██╔╝██║██╔═══╝ ██╔══██╗██║██║╚██╗██║   ██║   ",
+    "  ██║██║ ╚═╝ ██║██║     ██║  ██║██║██║ ╚████║   ██║   ",
+    "  ╚═╝╚═╝     ╚═╝╚═╝     ╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝   ╚═╝   ",
 ]
 
 _LOGO_COLORS = ["bright_green", "bright_green", "cyan", "cyan", "bright_green", "bright_green"]
@@ -61,7 +54,7 @@ def print_logo() -> None:
     """Print the big IMPRINT ASCII logo with gradient colors."""
     console.print()
     for line, color in zip(_LOGO_LINES, _LOGO_COLORS):
-        console.print(f"[bold {color}]{line}[/bold {color}]")
+        console.print(f"[{color}]{line}[/{color}]")
     console.print()
 
 
@@ -89,7 +82,7 @@ def print_tips() -> None:
     )
 
 
-def print_status_bar(version: str = "2.0.1") -> None:
+def print_status_bar(version: str = "2.0.0") -> None:
     """Print the Gemini CLI-style status bar."""
     try:
         hostname = socket.gethostname()
@@ -197,34 +190,3 @@ def make_summary_table(title: str, results: list[tuple[str, str, str]]) -> Table
             table.add_row(item, "[red]✗  failed[/red]", detail)
 
     return table
-
-
-# ── Backward Compatibility Shims ──────────────────────────────────────────────
-
-def print_header(text: str) -> None:
-    print_command_header(text)
-
-
-def print_success(text: str) -> None:
-    step_ok(text)
-
-
-def print_warning(text: str) -> None:
-    step_warn(text)
-
-
-def print_error(text: str) -> None:
-    step_error(text)
-
-
-def print_info(text: str) -> None:
-    step_info(text)
-
-
-def print_step(symbol: str, text: str, status: str = "ok") -> None:
-    if status == "ok":
-        step_ok(text)
-    elif status == "skipped":
-        step_warn(text)
-    else:
-        step_error(text)
