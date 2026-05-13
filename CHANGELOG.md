@@ -22,7 +22,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Snapshot Comparison**: Diff two snapshots side-by-side with `imp compare <a> <b>`.
 - **Interactive Init Wizard**: Guided first-run setup with `imp init`.
 - **Nord-Inspired Theme**: Complete UI overhaul with a Nord color palette, two-panel dashboard, progress bars, and branded ASCII logo.
-- **OIDC PyPI Publishing**: GitHub Actions workflow with trusted publishing (no API tokens needed).
+- **Automated PyPI Publishing**: GitHub Actions workflow using `PYPI_API_TOKEN` secret for secure publishing.
 - **CI Matrix**: Test against Python 3.11, 3.12, 3.13 on Ubuntu and macOS.
 - **Dependabot**: Automated dependency updates for pip and GitHub Actions.
 - **Dry-Run Restore**: Preview what `imp restore` would do without making changes.
@@ -42,7 +42,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **SSH Config collector**: Restricted to Host aliases only — never captures keys, passwords, or IdentityFile paths.
 - **Key file permissions**: Encryption keys created with `chmod 0o600`.
 - **No `shell=True`**: All subprocess calls use list arguments to prevent shell injection.
-- **OIDC publishing**: No PyPI API tokens stored in repository or CI.
+- **Token-based publishing**: `PYPI_API_TOKEN` stored as GitHub repository secret, never in code.
 
 ---
 
