@@ -116,14 +116,16 @@ All subprocess calls use list arguments (no `shell=True`) to prevent shell injec
 
 ## 📦 Publishing
 
-imprint-cli uses **OIDC trusted publishing** — no API tokens needed:
+imprint-cli uses GitHub Actions with a `PYPI_API_TOKEN` secret for automated publishing:
 
 ```bash
-# Tag a release on main
+# Tag a release on main (after merging PR)
 git tag v3.0.0
 git push origin main --tags
 # GitHub Actions automatically builds and publishes to PyPI
 ```
+
+> **Setup:** Add your PyPI API token as a repository secret named `PYPI_API_TOKEN` in **Settings → Secrets → Actions**.
 
 ---
 
