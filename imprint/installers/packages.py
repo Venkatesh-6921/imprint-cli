@@ -49,7 +49,11 @@ def install_system(packages: list[str], manager: str) -> list[tuple[str, str, st
             installed = 0
             for i, pkg in enumerate(packages, 1):
                 try:
-                    console.print(f"  [dim]({i}/{len(packages)}) winget install {pkg}...[/dim]", end="\r")
+                    msg = (
+                        f"  [dim]({i}/{len(packages)})"
+                        f" winget install {pkg}...[/dim]"
+                    )
+                    console.print(msg, end="\r")
                     subprocess.check_call(
                         ["winget", "install", "--id", pkg, "-e", "--silent",
                          "--accept-source-agreements", "--accept-package-agreements"],

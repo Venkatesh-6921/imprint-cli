@@ -1,6 +1,5 @@
 """Tests for the Manifest class — TOML round-trip and loading."""
 
-import tempfile
 from pathlib import Path
 
 from imprint.manifest import Manifest
@@ -25,15 +24,25 @@ def test_manifest_round_trip(tmp_path: Path) -> None:
     manifest.dotfiles = [".zshrc", ".gitconfig", ".vimrc"]
     manifest.vscode = {
         "version": "1.90.0",
-        "extensions": ["ms-python.python", "eamodio.gitlens"],
+        "extensions": [
+            "ms-python.python", "eamodio.gitlens"
+        ],
         "settings_included": True,
     }
     manifest.packages = {
-        "pip": {"packages": ["black==24.4.2", "ruff==0.4.7"]},
+        "pip": {
+            "packages": ["black==24.4.2", "ruff==0.4.7"]
+        },
         "npm": {"packages": ["typescript@5.4.5"]},
-        "system": {"manager": "apt", "packages": ["git", "curl"]},
+        "system": {
+            "manager": "apt",
+            "packages": ["git", "curl"],
+        },
     }
-    manifest.git = {"user_name": "Test User", "user_email": "test@example.com"}
+    manifest.git = {
+        "user_name": "Test User",
+        "user_email": "test@example.com",
+    }
     manifest.scripts = ["deploy.sh", "backup.sh"]
 
     # Write
@@ -51,14 +60,21 @@ def test_manifest_round_trip(tmp_path: Path) -> None:
     assert path1.read_bytes() == path2.read_bytes()
 
 
-def test_manifest_load_fields(tmp_path: Path) -> None:
+def test_manifest_load_fields(
+    tmp_path: Path,
+) -> None:
     """Loaded manifest has all the correct field values."""
     manifest = Manifest()
-    manifest.meta = {"hostname": "mypc", "snapshot_at": "2025-01-01"}
+    manifest.meta = {
+        "hostname": "mypc",
+        "snapshot_at": "2025-01-01",
+    }
     manifest.dotfiles = [".bashrc"]
     manifest.scripts = ["go.sh"]
     manifest.vscode = {"extensions": ["ext.one"]}
-    manifest.packages = {"pip": {"packages": ["requests==2.31.0"]}}
+    manifest.packages = {
+        "pip": {"packages": ["requests==2.31.0"]}
+    }
 
     path = tmp_path / "test.toml"
     manifest.save(path)
@@ -68,7 +84,9 @@ def test_manifest_load_fields(tmp_path: Path) -> None:
     assert loaded.dotfiles == [".bashrc"]
     assert loaded.scripts == ["go.sh"]
     assert loaded.vscode["extensions"] == ["ext.one"]
-    assert loaded.packages["pip"]["packages"] == ["requests==2.31.0"]
+    assert loaded.packages["pip"]["packages"] == [
+        "requests==2.31.0"
+    ]
 
 
 def test_manifest_empty(tmp_path: Path) -> None:

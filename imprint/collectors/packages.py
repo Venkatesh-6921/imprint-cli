@@ -9,7 +9,6 @@ import json
 import platform
 import subprocess
 
-
 # pip packages that ship with Python — don't snapshot these
 PIP_STDLIB = {"pip", "setuptools", "wheel", "pkg_resources", "distutils"}
 
@@ -106,34 +105,34 @@ def _get_apt_packages() -> list[str]:
 
 def _get_winget_packages() -> list[str]:
     """Get winget installed packages (Windows) using JSON export."""
-    import tempfile
     import os
+    import tempfile
     from pathlib import Path
-    
+
     try:
         tmp_json = Path(tempfile.gettempdir()) / f"winget_export_{os.getpid()}.json"
         if tmp_json.exists():
             tmp_json.unlink()
-            
+
         subprocess.check_call(
             ["winget", "export", "-o", str(tmp_json), "--accept-source-agreements"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        
-        with open(tmp_json, 'r', encoding='utf-8') as f:
+
+        with open(tmp_json, encoding='utf-8') as f:
             data = json.load(f)
-            
+
         packages = []
         for source in data.get("Sources", []):
             for pkg in source.get("Packages", []):
                 identifier = pkg.get("PackageIdentifier")
                 if identifier:
                     packages.append(identifier)
-                    
+
         if tmp_json.exists():
             tmp_json.unlink()
-            
+
         return packages
     except (Exception):
         return []

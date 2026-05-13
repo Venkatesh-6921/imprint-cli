@@ -1,120 +1,290 @@
 """
 Manifest — read/write environment.toml.
-The centrepiece of Imprint: a human-readable description of the developer environment.
+v3: new collector sections, multi-format export.
 """
 
 from __future__ import annotations
 
+import json
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import tomli_w
+import yaml
 
 from imprint.utils.platform import detect_platform
 
 
 @dataclass
 class Manifest:
-    """Represents the full environment manifest (environment.toml)."""
-
-    meta: dict = field(default_factory=dict)
-    system: dict = field(default_factory=dict)
+    meta:     dict = field(default_factory=dict)
+    system:   dict = field(default_factory=dict)
     dotfiles: list[str] = field(default_factory=list)
-    shell: dict = field(default_factory=dict)
-    vscode: dict = field(default_factory=dict)
+    shell:    dict = field(default_factory=dict)
+    vscode:   dict = field(default_factory=dict)
     packages: dict = field(default_factory=dict)
-    git: dict = field(default_factory=dict)
-    scripts: list[str] = field(default_factory=list)
-    fonts: dict = field(default_factory=dict)
+    git:      dict = field(default_factory=dict)
+    scripts:  list[str] = field(default_factory=list)
+    fonts:    dict = field(default_factory=dict)
+    # v3 additions
+    neovim:     dict = field(default_factory=dict)
+    cursor:     dict = field(default_factory=dict)
+    tmux:       dict = field(default_factory=dict)
+    ssh_config: dict = field(default_factory=dict)
 
-    def set_meta(self, timestamp: str) -> None:
-        """Populate meta section with current machine info."""
+    def set_meta(
+        self,
+        timestamp: str,
+        profile: str = "default",
+    ) -> None:
         from imprint import __version__
 
         info = detect_platform()
         self.meta = {
             "imprint_version": __version__,
-            "snapshot_at": timestamp,
-            "hostname": info.hostname,
-            "os": info.os_name.lower(),
-            "os_version": info.os_version,
-            "username": info.username,
+            "snapshot_at":     timestamp,
+            "profile":         profile,
+            "hostname":        info.hostname,
+            "os":              info.os_name.lower(),
+            "os_version":      info.os_version,
+            "username":        info.username,
         }
 
     def to_dict(self) -> dict:
-        """Convert manifest to a dict suitable for TOML serialization."""
         data: dict = {}
-        if self.meta:
-            data["meta"] = self.meta
-        if self.system:
-            data["system"] = self.system
+        for key in (
+            "meta", "system", "shell", "vscode",
+            "packages", "git", "fonts", "neovim",
+            "cursor", "tmux", "ssh_config",
+        ):
+            val = getattr(self, key)
+            if val:
+                if key == "vscode":
+                    data[key] = {
+                        k: v
+                        for k, v in val.items()
+                        if k != "settings_path"
+                    }
+                else:
+                    data[key] = val
         if self.dotfiles:
             data["dotfiles"] = {"files": self.dotfiles}
-        if self.shell:
-            data["shell"] = self.shell
-        if self.vscode:
-            # Filter out non-serializable keys
-            vscode_data = {
-                k: v for k, v in self.vscode.items() if k != "settings_path"
-            }
-            data["vscode"] = vscode_data
-        if self.packages:
-            data["packages"] = self.packages
-        if self.git:
-            data["git"] = self.git
         if self.scripts:
             data["scripts"] = {"files": self.scripts}
-        if self.fonts:
-            data["fonts"] = self.fonts
         return data
 
     def save(self, path: Path) -> None:
-        """Write manifest to a TOML file."""
-        data = self.to_dict()
-
-        def _clean_dict(d: dict) -> dict:
-            cleaned = {}
-            for k, v in d.items():
-                if v is None:
-                    continue
-                if isinstance(v, dict):
-                    cleaned[k] = _clean_dict(v)
-                elif isinstance(v, list):
-                    cleaned[k] = [_clean_dict(i) if isinstance(i, dict) else i for i in v if i is not None]
-                else:
-                    cleaned[k] = v
-            return cleaned
-
-        data = _clean_dict(data)
+        data = _clean(self.to_dict())
         path.write_bytes(tomli_w.dumps(data).encode())
 
     @classmethod
     def load(cls, path: Path) -> Manifest:
-        """Load manifest from a TOML file."""
         with open(path, "rb") as f:
             data = tomllib.load(f)
+        m = cls()
+        for key in (
+            "meta", "system", "shell", "vscode",
+            "packages", "git", "fonts", "neovim",
+            "cursor", "tmux", "ssh_config",
+        ):
+            setattr(m, key, data.get(key, {}))
 
-        manifest = cls()
-        manifest.meta = data.get("meta", {})
-        manifest.system = data.get("system", {})
+        def _list_section(key: str) -> list[str]:
+            s = data.get(key, {})
+            if isinstance(s, dict):
+                return s.get("files", [])
+            return s if isinstance(s, list) else []
 
-        dotfiles_section = data.get("dotfiles", {})
-        if isinstance(dotfiles_section, dict):
-            manifest.dotfiles = dotfiles_section.get("files", [])
-        elif isinstance(dotfiles_section, list):
-            manifest.dotfiles = dotfiles_section
+        m.dotfiles = _list_section("dotfiles")
+        m.scripts = _list_section("scripts")
+        return m
 
-        manifest.shell = data.get("shell", {})
-        manifest.vscode = data.get("vscode", {})
-        manifest.packages = data.get("packages", {})
-        manifest.git = data.get("git", {})
+    # ── Export ────────────────────────────────────────────
 
-        scripts_section = data.get("scripts", {})
-        if isinstance(scripts_section, dict):
-            manifest.scripts = scripts_section.get("files", [])
-        elif isinstance(scripts_section, list):
-            manifest.scripts = scripts_section
+    def export_json(self, path: Path) -> None:
+        path.write_text(
+            json.dumps(
+                self.to_dict(), indent=2, default=str
+            ),
+            encoding="utf-8",
+        )
 
-        manifest.fonts = data.get("fonts", {})
-        return manifest
+    def export_yaml(self, path: Path) -> None:
+        path.write_text(
+            yaml.dump(
+                self.to_dict(),
+                allow_unicode=True,
+                sort_keys=False,
+            ),
+            encoding="utf-8",
+        )
+
+    def export_markdown(self, path: Path) -> None:
+        lines: list[str] = []
+        snap = self.meta.get("snapshot_at", "unknown")
+        host = self.meta.get("hostname", "unknown")
+        os_ = (
+            f"{self.meta.get('os', '?')} "
+            f"{self.meta.get('os_version', '')}"
+        ).strip()
+        ver = self.meta.get("imprint_version", "?")
+        prof = self.meta.get("profile", "default")
+
+        lines += [
+            f"# Developer Environment — {host}",
+            "",
+            (
+                f"> Captured by **imprint v{ver}** "
+                f"on `{snap}`  ·  Profile: `{prof}`"
+            ),
+            "",
+            "## System",
+            "",
+            "| Key | Value |",
+            "|-----|-------|",
+            f"| OS | {os_} |",
+            (
+                f"| Python | "
+                f"{self.system.get('python_version', 'n/a')}"
+                f" |"
+            ),
+            (
+                f"| Node | "
+                f"{self.system.get('node_version', 'n/a')}"
+                f" |"
+            ),
+            (
+                f"| Git | "
+                f"{self.system.get('git_version', 'n/a')}"
+                f" |"
+            ),
+            "",
+        ]
+
+        # Dotfiles
+        if self.dotfiles:
+            lines += ["## Dotfiles", ""]
+            for f in sorted(self.dotfiles):
+                lines.append(f"- `{f}`")
+            lines.append("")
+
+        # Packages
+        for pm_name, pm_data in self.packages.items():
+            pkgs = (
+                pm_data.get("packages", [])
+                if isinstance(pm_data, dict)
+                else []
+            )
+            if pkgs:
+                lines += [f"## Packages — {pm_name}", ""]
+                for p in sorted(pkgs):
+                    lines.append(f"- `{p}`")
+                lines.append("")
+
+        # VS Code
+        exts = self.vscode.get("extensions", [])
+        if exts:
+            lines += ["## VS Code Extensions", ""]
+            for e in sorted(exts):
+                lines.append(f"- `{e}`")
+            lines.append("")
+
+        # Shell
+        if self.shell:
+            lines += ["## Shell", ""]
+            for k, v in self.shell.items():
+                lines.append(f"**{k}:** {v}")
+            lines.append("")
+
+        # Git
+        if self.git:
+            lines += ["## Git Config", ""]
+            for k, v in self.git.items():
+                lines.append(f"**{k}:** {v}")
+            lines.append("")
+
+        # Neovim
+        if self.neovim:
+            lines += ["## Neovim", ""]
+            plugins = self.neovim.get("plugins", [])
+            if plugins:
+                for p in plugins:
+                    lines.append(f"- `{p}`")
+            lines.append("")
+
+        path.write_text(
+            "\n".join(lines), encoding="utf-8"
+        )
+
+    def export_shell_script(self, path: Path) -> None:
+        """Generate a standalone install.sh."""
+        snap = self.meta.get("snapshot_at", "unknown")
+        lines = [
+            "#!/usr/bin/env bash",
+            "# Generated by imprint v3 — env restore",
+            f"# Snapshot: {snap}",
+            "",
+            "set -euo pipefail",
+            "",
+        ]
+
+        # pip
+        pip_pkgs = (
+            self.packages.get("pip", {})
+            .get("packages", [])
+        )
+        if pip_pkgs:
+            lines += [
+                "echo '→ Installing pip packages...'",
+                f"pip install {' '.join(pip_pkgs)}",
+                "",
+            ]
+
+        # npm
+        npm_pkgs = (
+            self.packages.get("npm", {})
+            .get("packages", [])
+        )
+        if npm_pkgs:
+            lines += [
+                "echo '→ Installing npm global packages...'",
+                f"npm install -g {' '.join(npm_pkgs)}",
+                "",
+            ]
+
+        # VS Code
+        exts = self.vscode.get("extensions", [])
+        if exts:
+            lines += [
+                "echo '→ Installing VS Code extensions...'"
+            ]
+            for ext in exts:
+                lines.append(
+                    f"code --install-extension {ext} --force"
+                )
+            lines.append("")
+
+        lines += ["echo '✓ Done!'"]
+        path.write_text(
+            "\n".join(lines), encoding="utf-8"
+        )
+        path.chmod(0o755)
+
+
+def _clean(d: dict) -> dict:
+    cleaned = {}
+    for k, v in d.items():
+        if v is None:
+            continue
+        if isinstance(v, dict):
+            cleaned[k] = _clean(v)
+        elif isinstance(v, list):
+            cleaned[k] = [
+                _clean(i) if isinstance(i, dict) else i
+                for i in v
+                if i is not None
+            ]
+        else:
+            cleaned[k] = v
+    return cleaned

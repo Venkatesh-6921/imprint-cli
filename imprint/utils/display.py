@@ -1,6 +1,6 @@
 """
-Imprint v2 — Rich display helpers.
-Gemini CLI-inspired terminal UI: ASCII logo, tips panel, styled output.
+Imprint v3 — Rich display helpers.
+Upgraded theme: Nord-inspired palette, richer components, live progress.
 """
 
 from __future__ import annotations
@@ -9,222 +9,371 @@ import platform
 import socket
 from datetime import datetime
 
+from rich.columns import Columns
 from rich.console import Console
 from rich.panel import Panel
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
 from rich.table import Table
 from rich.text import Text
 from rich.theme import Theme
 
-# ── Theme ────────────────────────────────────────────────────────────────────
+# ── Theme ─────────────────────────────────────────────────────────────────────
 
 IMPRINT_THEME = Theme(
     {
-        "imp.brand":   "bold bright_green",
-        "imp.success": "bright_green",
-        "imp.warn":    "yellow",
-        "imp.error":   "bold red",
-        "imp.info":    "cyan",
-        "imp.dim":     "dim",
-        "imp.cmd":     "bold cyan",
-        "imp.add":     "bright_green",
-        "imp.remove":  "red",
-        "imp.modify":  "yellow",
-        "imp.head":    "bold magenta",
-        # Backward compatibility for old calls if any remain temporarily
-        "imprint.brand": "bold bright_green",
-        "imprint.success": "bright_green",
-        "imprint.warning": "yellow",
-        "imprint.error": "bold red",
-        "imprint.info": "cyan",
-        "imprint.dim": "dim",
+        # Brand
+        "imp.brand":    "bold #88c0d0",       # Nord frost blue
+        "imp.accent":   "bold #a3be8c",        # Nord green
+        "imp.logo1":    "#88c0d0",
+        "imp.logo2":    "#81a1c1",
+        # State
+        "imp.success":  "#a3be8c",
+        "imp.warn":     "#ebcb8b",
+        "imp.error":    "bold #bf616a",
+        "imp.info":     "#88c0d0",
+        # Diff
+        "imp.add":      "#a3be8c",
+        "imp.remove":   "#bf616a",
+        "imp.modify":   "#ebcb8b",
+        "imp.same":     "dim",
+        # Misc
+        "imp.dim":      "dim",
+        "imp.cmd":      "bold #88c0d0",
+        "imp.head":     "bold #b48ead",
+        "imp.border":   "#4c566a",
+        "imp.hl":       "#eceff4",
     }
 )
 
 console = Console(theme=IMPRINT_THEME)
 
 
-# ── ASCII Logo ────────────────────────────────────────────────────────────────
+# ── ASCII Logo ─────────────────────────────────────────────────────────────────
 
 _LOGO_LINES = [
-    r"  _____ __  __ _____  _____ _____ _   _ _______ ",
-    r" |_   _|  \/  |  __ \|  __ \_   _| \ | |__   __|",
-    r"   | | | \  / | |__) | |__) || | |  \| |  | |   ",
-    r"   | | | |\/| |  ___/|  _  / | | | . ` |  | |   ",
-    r"  _| |_| |  | | |    | | \ \_| |_| |\  |  | |   ",
-    r" |_____|_|  |_|_|    |_|  \_\______|_| \_|  |_|   ",
+    "  ██╗███╗   ███╗██████╗ ██████╗ ██╗███╗   ██╗████████╗",
+    "  ██║████╗ ████║██╔══██╗██╔══██╗██║████╗  ██║╚══██╔══╝",
+    "  ██║██╔████╔██║██████╔╝██████╔╝██║██╔██╗ ██║   ██║   ",
+    "  ██║██║╚██╔╝██║██╔═══╝ ██╔══██╗██║██║╚██╗██║   ██║   ",
+    "  ██║██║ ╚═╝ ██║██║     ██║  ██║██║██║ ╚████║   ██║   ",
+    "  ╚═╝╚═╝     ╚═╝╚═╝     ╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝   ╚═╝  ",
 ]
 
-_LOGO_COLORS = ["bright_green", "bright_green", "cyan", "cyan", "bright_green", "bright_green"]
+_LOGO_ALTS = [
+    "imp.logo1", "imp.logo1", "imp.logo2",
+    "imp.logo2", "imp.logo1", "imp.logo1",
+]
 
 
 def print_logo() -> None:
-    """Print the big IMPRINT ASCII logo with gradient colors."""
     console.print()
-    for line, color in zip(_LOGO_LINES, _LOGO_COLORS):
-        console.print(f"[bold {color}]{line}[/bold {color}]")
-    console.print()
-
-
-def print_tips() -> None:
-    """Print the Gemini CLI-style tips box."""
-    tips = Text()
-    tips.append("Tips for getting started:\n", style="bold bright_green")
-    tip_items = [
-        ("imp snapshot", "Capture your full environment on this machine."),
-        ("imp restore <url>", "Restore everything on a new machine."),
-        ("imp diff", "See what changed since your last snapshot."),
-        ("imp --help", "Full list of commands and options."),
-    ]
-    for i, (cmd, desc) in enumerate(tip_items, 1):
-        tips.append(f"  {i}. ", style="dim")
-        tips.append(cmd, style="bold cyan")
-        tips.append(f"  -  {desc}\n", style="dim")
-
+    for line, style in zip(_LOGO_LINES, _LOGO_ALTS):
+        console.print(f"[{style}]{line}[/{style}]")
     console.print(
-        Panel(
-            tips,
-            border_style="bright_green",
-            padding=(0, 2),
-        )
+        "  [imp.dim]v3.0.0  ·  Stamp your dev environment"
+        " on any machine[/imp.dim]"
     )
+    console.print()
 
 
-def print_status_bar(version: str = "2.0.1") -> None:
-    """Print the Gemini CLI-style status bar."""
+# ── Dashboard (replaces old print_tips) ──────────────────────────────────────
+
+def print_dashboard(
+    version: str, profile: str = "default"
+) -> None:
+    """Full `imp` no-args dashboard — two-panel layout."""
     try:
         hostname = socket.gethostname()
     except Exception:
         hostname = "localhost"
     os_name = platform.system()
+    now = datetime.now().strftime("%Y-%m-%d  %H:%M")
+
+    # Left panel — commands
+    cmd_text = Text()
+    cmd_text.append("Quick commands\n\n", style="bold #eceff4")
+    cmds = [
+        ("imp snapshot",         "Capture full environment"),
+        ("imp restore <url>",    "Restore on a new machine"),
+        ("imp diff",             "What changed since snapshot"),
+        ("imp update",           "Snapshot + push in one step"),
+        ("imp init",             "First-run interactive wizard"),
+        ("imp doctor",           "Health check & diagnostics"),
+        ("imp history",          "Browse past snapshots"),
+        ("imp export --fmt md",  "Export env as Markdown report"),
+        ("imp profile use work", "Switch to named profile"),
+        ("imp compare s1 s2",    "Diff two snapshots"),
+    ]
+    for cmd, desc in cmds:
+        cmd_text.append(f"  {cmd:<28}", style="imp.cmd")
+        cmd_text.append(f"{desc}\n", style="imp.dim")
+
+    left = Panel(
+        cmd_text,
+        border_style="imp.border",
+        padding=(0, 1),
+        title="[imp.brand]commands[/imp.brand]",
+    )
+
+    # Right panel — machine info
+    info_table = Table(
+        show_header=False, box=None, padding=(0, 1)
+    )
+    info_table.add_column("k", style="imp.dim", no_wrap=True)
+    info_table.add_column("v", style="#eceff4")
+    info_table.add_row("machine",  hostname)
+    info_table.add_row("os",       os_name)
+    info_table.add_row("version",  f"imprint v{version}")
+    info_table.add_row(
+        "profile",
+        f"[imp.accent]{profile}[/imp.accent]",
+    )
+    info_table.add_row("time",     now)
+
+    right = Panel(
+        info_table,
+        border_style="imp.border",
+        padding=(0, 1),
+        title="[imp.brand]machine[/imp.brand]",
+    )
+
+    console.print(
+        Columns([left, right], equal=True, expand=True)
+    )
+    console.print()
+
+
+def print_status_bar(
+    version: str = "3.0.0", profile: str = "default"
+) -> None:
+    try:
+        hostname = socket.gethostname()
+    except Exception:
+        hostname = "localhost"
     now = datetime.now().strftime("%H:%M")
-
     bar = Text()
-    bar.append(f"  ~/.imprint", style="dim")
-    bar.append("  |  ", style="bright_black")
-    bar.append(f"{hostname}", style="dim")
-    bar.append("  |  ", style="bright_black")
-    bar.append(f"{os_name}", style="dim")
-    bar.append("  |  ", style="bright_black")
-    bar.append(f"imprint v{version}", style="bright_green")
-    bar.append(f"  |  {now}", style="dim")
-
+    bar.append("  ~/.imprint", style="imp.dim")
+    bar.append("  ·  ", style="imp.border")
+    bar.append(hostname, style="imp.dim")
+    bar.append("  ·  ", style="imp.border")
+    bar.append(f"profile:{profile}", style="imp.accent")
+    bar.append("  ·  ", style="imp.border")
+    bar.append(f"imprint v{version}", style="imp.brand")
+    bar.append(f"  ·  {now}", style="imp.dim")
     console.print(bar)
     console.print()
 
 
-# ── Section headers ───────────────────────────────────────────────────────────
+# ── Section headers ──────────────────────────────────────────────────────────
 
-def print_command_header(title: str, subtitle: str = "") -> None:
-    """Print a Gemini CLI-style command header."""
+def print_command_header(
+    title: str, subtitle: str = ""
+) -> None:
     content = Text()
-    content.append("  > ", style="bright_green bold")
-    content.append(title, style="bold white")
+    content.append("  ❯ ", style="imp.accent bold")
+    content.append(title, style="bold #eceff4")
     if subtitle:
-        content.append(f"\n    {subtitle}", style="dim")
-    console.print(Panel(content, border_style="bright_green", padding=(0, 1)))
+        content.append(f"\n    {subtitle}", style="imp.dim")
+    console.print(
+        Panel(content, border_style="imp.accent", padding=(0, 1))
+    )
     console.print()
 
 
-# ── Step / result printers ────────────────────────────────────────────────────
+# ── Step printers ─────────────────────────────────────────────────────────────
 
 def step_ok(label: str, detail: str = "") -> None:
-    detail_str = f"  [dim]{detail}[/dim]" if detail else ""
-    console.print(f"  [bright_green]✓[/bright_green]  {label}{detail_str}")
+    d = f"  [imp.dim]{detail}[/imp.dim]" if detail else ""
+    console.print(
+        f"  [imp.success]✓[/imp.success]  {label}{d}"
+    )
 
 
 def step_warn(label: str, detail: str = "") -> None:
-    detail_str = f"  [dim]{detail}[/dim]" if detail else ""
-    console.print(f"  [yellow]⚠[/yellow]  {label}{detail_str}")
+    d = f"  [imp.dim]{detail}[/imp.dim]" if detail else ""
+    console.print(
+        f"  [imp.warn]⚠[/imp.warn]  {label}{d}"
+    )
 
 
 def step_error(label: str, detail: str = "") -> None:
-    detail_str = f"  [dim]{detail}[/dim]" if detail else ""
-    console.print(f"  [bold red]✗[/bold red]  {label}{detail_str}")
+    d = f"  [imp.dim]{detail}[/imp.dim]" if detail else ""
+    console.print(
+        f"  [imp.error]✗[/imp.error]  {label}{d}"
+    )
 
 
 def step_info(label: str, detail: str = "") -> None:
-    detail_str = f"  [dim]{detail}[/dim]" if detail else ""
-    console.print(f"  [cyan]→[/cyan]  {label}{detail_str}")
+    d = f"  [imp.dim]{detail}[/imp.dim]" if detail else ""
+    console.print(
+        f"  [imp.info]→[/imp.info]  {label}{d}"
+    )
 
+
+# ── Divider ───────────────────────────────────────────────────────────────────
 
 def divider(label: str = "") -> None:
     if label:
-        console.rule(f"[dim]{label}[/dim]", style="bright_black")
+        console.rule(
+            f"[imp.dim]{label}[/imp.dim]",
+            style="imp.border",
+        )
     else:
-        console.rule(style="bright_black")
+        console.rule(style="imp.border")
     console.print()
 
 
 # ── Diff helpers ──────────────────────────────────────────────────────────────
 
 def diff_add(name: str, note: str = "added") -> None:
-    console.print(f"  [bright_green]+[/bright_green]  [bright_green]{name:<42}[/bright_green]  [dim]{note}[/dim]")
+    console.print(
+        f"  [imp.add]+[/imp.add]  "
+        f"[imp.add]{name:<46}[/imp.add]  "
+        f"[imp.dim]{note}[/imp.dim]"
+    )
 
 
 def diff_remove(name: str, note: str = "removed") -> None:
-    console.print(f"  [red]-[/red]  [red]{name:<42}[/red]  [dim]{note}[/dim]")
+    console.print(
+        f"  [imp.remove]-[/imp.remove]  "
+        f"[imp.remove]{name:<46}[/imp.remove]  "
+        f"[imp.dim]{note}[/imp.dim]"
+    )
 
 
 def diff_modify(name: str, note: str = "modified") -> None:
-    console.print(f"  [yellow]~[/yellow]  [yellow]{name:<42}[/yellow]  [dim]{note}[/dim]")
+    console.print(
+        f"  [imp.modify]~[/imp.modify]  "
+        f"[imp.modify]{name:<46}[/imp.modify]  "
+        f"[imp.dim]{note}[/imp.dim]"
+    )
 
 
 def diff_same(name: str) -> None:
-    console.print(f"  [dim]=[/dim]  [dim]{name:<42}  unchanged[/dim]")
+    console.print(
+        f"  [imp.same]=[/imp.same]  "
+        f"[imp.same]{name:<46}  unchanged[/imp.same]"
+    )
 
 
 # ── Summary table ─────────────────────────────────────────────────────────────
 
-def make_summary_table(title: str, results: list[tuple[str, str, str]]) -> Table:
+def make_summary_table(
+    title: str, results: list[tuple[str, str, str]]
+) -> Table:
     table = Table(
-        title=Text(title, style="bold bright_green"),
+        title=Text(title, style="bold #eceff4"),
         show_header=True,
-        header_style="bold cyan",
-        border_style="bright_black",
+        header_style="imp.brand",
+        border_style="imp.border",
         show_lines=False,
         padding=(0, 2),
     )
-    table.add_column("Item", style="white", no_wrap=True)
+    table.add_column("Item", style="#eceff4", no_wrap=True)
     table.add_column("Status", justify="center")
-    table.add_column("Detail", style="dim")
+    table.add_column("Detail", style="imp.dim")
 
     for item, status, detail in results:
         if status == "ok":
-            table.add_row(item, "[bright_green]✓  ok[/bright_green]", detail)
+            table.add_row(
+                item,
+                "[imp.success]✓  ok[/imp.success]",
+                detail,
+            )
         elif status == "skipped":
-            table.add_row(item, "[yellow]⚠  skipped[/yellow]", detail)
+            table.add_row(
+                item,
+                "[imp.warn]⚠  skipped[/imp.warn]",
+                detail,
+            )
         else:
-            table.add_row(item, "[red]✗  failed[/red]", detail)
-
+            table.add_row(
+                item,
+                "[imp.error]✗  failed[/imp.error]",
+                detail,
+            )
     return table
 
 
-# ── Backward Compatibility Shims ──────────────────────────────────────────────
+# ── Snapshot progress factory ─────────────────────────────────────────────────
 
-def print_header(text: str) -> None:
-    print_command_header(text)
+def make_snapshot_progress() -> Progress:
+    return Progress(
+        SpinnerColumn(
+            spinner_name="dots2", style="imp.accent"
+        ),
+        TextColumn(
+            "  [progress.description]{task.description}"
+        ),
+        BarColumn(
+            bar_width=22,
+            style="imp.border",
+            complete_style="imp.accent",
+        ),
+        TaskProgressColumn(),
+        TimeElapsedColumn(),
+        console=console,
+        transient=False,
+    )
 
 
-def print_success(text: str) -> None:
-    step_ok(text)
+# ── History timeline ──────────────────────────────────────────────────────────
 
+def print_snapshot_timeline(
+    snapshots: list[dict],
+) -> None:
+    """Print a timeline table of past snapshots.
 
-def print_warning(text: str) -> None:
-    step_warn(text)
+    Args:
+        snapshots: list of dicts with keys: timestamp,
+            hostname, dotfiles, packages, vscode.
+    """
+    if not snapshots:
+        step_warn(
+            "No snapshots found.",
+            "Run  imp snapshot  first.",
+        )
+        return
 
+    table = Table(
+        title=Text("Snapshot History", style="bold #eceff4"),
+        show_header=True,
+        header_style="imp.brand",
+        border_style="imp.border",
+        padding=(0, 2),
+    )
+    table.add_column(
+        "#", justify="right", style="imp.dim", width=4
+    )
+    table.add_column(
+        "Timestamp", style="#eceff4", no_wrap=True
+    )
+    table.add_column("Machine", style="imp.dim")
+    table.add_column(
+        "Dotfiles", justify="right", style="imp.info"
+    )
+    table.add_column(
+        "Packages", justify="right", style="imp.info"
+    )
+    table.add_column(
+        "VSCode", justify="right", style="imp.info"
+    )
 
-def print_error(text: str) -> None:
-    step_error(text)
-
-
-def print_info(text: str) -> None:
-    step_info(text)
-
-
-def print_step(symbol: str, text: str, status: str = "ok") -> None:
-    if status == "ok":
-        step_ok(text)
-    elif status == "skipped":
-        step_warn(text)
-    else:
-        step_error(text)
+    for i, s in enumerate(reversed(snapshots), 1):
+        table.add_row(
+            str(i),
+            s.get("timestamp", "—"),
+            s.get("hostname", "—"),
+            str(s.get("dotfiles", "—")),
+            str(s.get("packages", "—")),
+            str(s.get("vscode", "—")),
+        )
+    console.print(table)
+    console.print()

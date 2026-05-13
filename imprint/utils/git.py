@@ -1,6 +1,7 @@
 """
 Git utilities for Imprint.
 Handles pushing config to GitHub and cloning repos.
+v3: branch parameter support.
 """
 
 from __future__ import annotations
@@ -10,15 +11,20 @@ from pathlib import Path
 import git as gitpython
 
 
-def push_to_github(imprint_dir: Path, repo_url: str) -> None:
+def push_to_github(
+    imprint_dir: Path,
+    repo_url: str,
+    branch: str = "main",
+) -> None:
     """Push the imprint config directory to a GitHub repo.
 
     If the directory isn't a git repo yet, initializes one.
-    Commits all changes and pushes to origin/main.
+    Commits all changes and pushes to origin.
 
     Args:
         imprint_dir: Path to ~/.imprint/.
         repo_url: GitHub repo URL.
+        branch: Remote branch to push to.
     """
     try:
         repo = gitpython.Repo(imprint_dir)
@@ -36,16 +42,22 @@ def push_to_github(imprint_dir: Path, repo_url: str) -> None:
     # Add all files and commit
     repo.git.add(A=True)
 
-    if repo.is_dirty(untracked_files=True) or repo.untracked_files:
+    if (
+        repo.is_dirty(untracked_files=True)
+        or repo.untracked_files
+    ):
         repo.index.commit("Imprint snapshot update")
 
-    # Push to main
+    # Push to configured branch
     origin = repo.remotes.origin
+    refspec = f"HEAD:{branch}"
     try:
-        origin.push(refspec="HEAD:main")
+        origin.push(refspec=refspec)
     except gitpython.GitCommandError:
-        # If main doesn't exist remotely, try pushing with --set-upstream
-        origin.push(refspec="HEAD:main", set_upstream=True)
+        # If branch doesn't exist remotely, create it
+        origin.push(
+            refspec=refspec, set_upstream=True
+        )
 
 
 def clone_repo(url: str, dest: Path) -> Path:

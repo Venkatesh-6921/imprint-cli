@@ -6,10 +6,8 @@ Identifies OS type: Linux, macOS, Windows, or WSL.
 from __future__ import annotations
 
 import platform
-import subprocess
 from dataclasses import dataclass
 from enum import Enum
-from pathlib import Path
 
 
 class OSType(Enum):

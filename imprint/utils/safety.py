@@ -8,7 +8,6 @@ from __future__ import annotations
 import fnmatch
 from pathlib import Path
 
-
 # Hard-coded patterns that are ALWAYS excluded, regardless of .imprintignore
 _ALWAYS_EXCLUDE = [
     ".ssh/id_*",
