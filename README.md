@@ -1,126 +1,142 @@
-# 🔏 Imprint v2
+# 🔏 Imprint v3
 
 ![Imprint Demo](https://raw.githubusercontent.com/Venkatesh-6921/imprint-cli/main/demo.png)
 
 **Stamp your developer environment on any machine.**
 
-Imprint is a premium CLI tool inspired by the Gemini CLI experience. It allows you to snapshot your entire machine's developer setup — from dotfiles and VS Code extensions to global packages and shell configurations — and restore it perfectly on a new machine in seconds.
+Imprint is a premium CLI tool that snapshots your entire machine's developer setup — dotfiles, VS Code extensions, Neovim plugins, tmux config, global packages, shell settings — and restores it perfectly on a new machine in seconds. Now with named profiles, AES-256-GCM encryption, and multi-format export.
 
 ---
 
-## ✨ Features
+## ✨ What's New in v3
 
-- **🚀 Instant Snapshot:** Capture EVERYTHING with `imp snapshot`.
-- **🔄 Zero-Touch Restore:** Rebuild your world with `imp restore`.
-- **💎 Premium UI:** Branded themes, dynamic progress bars, and high-fidelity terminal aesthetics.
-- **🛡️ Hardened Safety:** Automated filtering of SSH keys, tokens, and secrets via a non-bypassable `.imprintignore` system.
-- **🌐 Cloud Sync:** Built-in GitHub integration for secure, versioned backups.
-- **🍎 Universal:** First-class support for Windows, macOS, Linux, and WSL.
+- 🧑‍💻 **Named Profiles** — `work`, `home`, `laptop` — switch with `imp profile use`
+- 🔐 **AES-256-GCM Encryption** — encrypt dotfiles before pushing to GitHub
+- 📤 **Multi-Format Export** — JSON, YAML, Markdown, or shell script
+- 🔭 **6 New Collectors** — Neovim, Cursor IDE, tmux, SSH config, Cargo, uv
+- 🩺 **Doctor & Diagnostics** — `imp doctor` validates your entire setup
+- 📜 **Snapshot History** — browse past snapshots with `imp history`
+- 🔄 **Compare Snapshots** — diff two snapshots with `imp compare`
+- 👁️ **Watch Mode** — auto-snapshot on file changes
+- 🎨 **Nord Theme** — premium UI with branded dashboard
 
 ---
 
 ## 🚀 Quick Start
 
 ### 1. Installation
+
 ```bash
 pip install imprint-cli
+
+# With encryption support
+pip install imprint-cli[crypto]
+
+# With watch mode
+pip install imprint-cli[watch]
+
+# Everything
+pip install imprint-cli[full]
 ```
 
-### 2. Capture Your World
+### 2. First-Run Setup
+
+```bash
+imp init
+```
+
+### 3. Capture Your World
+
 ```bash
 imp snapshot
 ```
-*On first run, Imprint will prompt you for an optional GitHub repository URL to enable cloud syncing.*
 
-### 3. Move to a New Machine
+### 4. Move to a New Machine
+
 ```bash
 imp restore https://github.com/your-username/my-imprint-config.git
 ```
 
 ---
 
-## 📺 Demo
-
-See Imprint v2 in action. You can try restoring a sample "Demo Environment" directly from GitHub:
-
-```bash
-# Preview restoring a sample environment
-imp restore https://github.com/Venkatesh-6921/imprint-demo.git --dry-run
-```
-
-**What happens during restore?**
-1.  **🔍 Clone:** Retrieves the configuration repo from GitHub.
-2.  **📁 Dotfiles:** Symlinks `.zshrc`, `.tmux.conf`, etc., to your `$HOME`.
-3.  **🧩 Extensions:** Installs all listed VS Code extensions.
-4.  **📦 Packages:** Reinstalls your favorite `pip` and `npm` tools.
-5.  **✨ Finish:** Your environment is ready to use immediately.
-
----
-
-## 🛠️ Usage
+## 🛠️ All Commands
 
 | Command | Action |
 |---|---|
-| `imp snapshot` | Captures your current environment and pushes to GitHub. |
-| `imp restore` | Restores environment from local or GitHub source. |
-| `imp diff` | See exactly what has changed since your last snapshot. |
-| `imp update` | Quick alias for `snapshot + push`. |
-| `imp status` | View a high-level overview of your tracked configuration. |
+| `imp` | Interactive dashboard with machine info |
+| `imp init` | First-run setup wizard |
+| `imp snapshot` | Capture full environment and push |
+| `imp restore [url]` | Restore from local or GitHub source |
+| `imp restore [url] --dry-run` | Preview what would be restored |
+| `imp diff` | See what changed since last snapshot |
+| `imp update` | Quick snapshot + push |
+| `imp status` | Overview of tracked configuration |
+| `imp doctor` | Health check & diagnostics |
+| `imp history` | Browse past snapshots |
+| `imp export --fmt md` | Export as Markdown report |
+| `imp profile list` | List named profiles |
+| `imp profile use work` | Switch to a named profile |
+| `imp compare latest previous` | Diff two snapshots |
+| `imp encrypt --init` | Generate encryption key |
+| `imp watch` | Auto-snapshot on file changes |
 
 ---
 
-## 🔍 What gets captured?
+## 🔍 What Gets Captured?
 
-- **Dotfiles:** `.zshrc`, `.bashrc`, `.gitconfig`, `.vimrc`, and more.
-- **VS Code:** Complete extension manifest + `settings.json`.
-- **Packages:** Global packages from `pip`, `npm`, `apt`, `brew`, and `winget`.
-- **Shell:** Frameworks (Oh My Zsh), themes, and plugin configurations.
-- **Scripts:** Everything in your `~/bin` folder.
-- **System:** Runtimes like Python, Node.js, and Git versions.
+| Category | Details |
+|---|---|
+| **Dotfiles** | `.zshrc`, `.bashrc`, `.gitconfig`, `.vimrc`, and more |
+| **VS Code** | Complete extension manifest + `settings.json` |
+| **Neovim** | lazy.nvim / packer plugins, `init.lua` |
+| **Cursor IDE** | Extensions list |
+| **tmux** | Config, prefix key, TPM plugins |
+| **Packages** | `pip`, `npm`, `apt`/`brew`/`winget`, `cargo`, `uv` |
+| **Shell** | Oh My Zsh theme, plugins, aliases, functions |
+| **SSH Config** | Host aliases only (never keys or passwords) |
+| **Scripts** | Everything in `~/bin` |
+| **System** | Python, Node.js, Git versions, OS info |
 
 ---
 
 ## 🔏 Security First
 
-Imprint is designed to be secure by default. It **never** captures sensitive files. Our `.imprintignore` system automatically blocks:
-- 🔑 SSH Keys (`.ssh/id_*`)
-- 🎫 Tokens & Secrets (`*.token`, `*secret*`)
-- 🌐 Environment files (`.env`)
-- ☁️ Cloud credentials (`.aws/`, `.kube/`)
-- 📜 Shell history (`.zsh_history`)
+Imprint is designed to be secure by default. It **never** captures sensitive files. The `.imprintignore` system automatically blocks:
+
+- 🔑 SSH Keys (`.ssh/id_*`, `*.pem`, `*.key`)
+- 🎫 Tokens & Secrets (`*.token`, `*secret*`, `*api_key*`)
+- 🌐 Environment files (`.env`, `.env.*`)
+- ☁️ Cloud credentials (`.aws/credentials`, `.gcloud/`, `.kube/`)
+- 📜 Shell history (`.bash_history`, `.zsh_history`)
+- 🔒 GPG keys (`.gnupg/`)
+
+All subprocess calls use list arguments (no `shell=True`) to prevent shell injection.
 
 ---
 
-## 📦 For Developers: Publishing to PyPI
+## 📦 Publishing
 
-### Pre-requisites
-- A [PyPI](https://pypi.org/) account.
-- An API Token (`__token__`).
+imprint-cli uses **OIDC trusted publishing** — no API tokens needed:
 
-### Build & Upload
-1. **Build the package:**
-   ```bash
-   python -m build
-   ```
-2. **Upload securely:**
-   ```powershell
-   # Set credentials in environment variables
-   $env:TWINE_USERNAME="__token__"
-   $env:TWINE_PASSWORD="pypi-your-token-here"
-   python -m twine upload dist/*
-   ```
+```bash
+# Tag a release on main
+git tag v3.0.0
+git push origin main --tags
+# GitHub Actions automatically builds and publishes to PyPI
+```
 
-> [!TIP]
-> **Forgot your PyPI Token?**
-> PyPI API tokens are only shown once. If you lose or forget it:
-> 1. Log in to your PyPI account.
-> 2. Go to **Account Settings**.
-> 3. Scroll to **API tokens**.
-> 4. Delete the lost token and click **Add API token**.
-> 5. Copy the new token immediately!
+---
+
+## 🤝 Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, git workflow, and how to add new collectors.
+
+## 📜 Code of Conduct
+
+See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
 ---
 
 ## 📄 License
 
-MIT © [Venkatesh](https://github.com/Venkatesh-6921)
+MIT © [Venkatesh-6921](https://github.com/Venkatesh-6921)

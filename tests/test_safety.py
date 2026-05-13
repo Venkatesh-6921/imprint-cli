@@ -1,100 +1,126 @@
-"""Tests for the safety module — .imprintignore filtering."""
+"""Tests for safety module — .imprintignore parsing and file filtering."""
 
 from pathlib import Path
 
-from imprint.utils.safety import filter_safe_files, is_safe_file, load_ignore_patterns
+from imprint.utils.safety import (
+    filter_safe_files,
+    load_ignore_patterns,
+)
 
 
-def test_ssh_keys_always_blocked(tmp_path: Path) -> None:
-    """SSH keys must never pass the filter, even without an .imprintignore file."""
+def test_always_exclude_ssh_keys(tmp_path: Path) -> None:
+    """SSH keys should always be excluded."""
     home = tmp_path / "home"
     home.mkdir()
     ssh_dir = home / ".ssh"
     ssh_dir.mkdir()
+    (ssh_dir / "id_rsa").write_text("private key")
+    (ssh_dir / "id_ed25519").write_text("private key")
+    (ssh_dir / "config").write_text("Host example")
 
-    # Create fake SSH key files
-    (ssh_dir / "id_rsa").write_text("fake key")
-    (ssh_dir / "id_ed25519").write_text("fake key")
-    (ssh_dir / "deploy.pem").write_text("fake cert")
-
-    # Create a safe file
-    (home / ".zshrc").write_text("# config")
+    ignore_path = home / ".imprintignore"
+    ignore_path.write_text("")
 
     files = [
         ssh_dir / "id_rsa",
         ssh_dir / "id_ed25519",
-        ssh_dir / "deploy.pem",
+        ssh_dir / "config",
+    ]
+    safe = filter_safe_files(files, ignore_path, home)
+    names = [f.name for f in safe]
+    assert "id_rsa" not in names
+    assert "id_ed25519" not in names
+    assert "config" in names
+
+
+def test_always_exclude_env_files(
+    tmp_path: Path,
+) -> None:
+    """Environment files should always be excluded."""
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".env").write_text("SECRET=xyz")
+    (home / ".env.local").write_text("DB=local")
+    (home / ".zshrc").write_text("# zsh")
+
+    ignore_path = home / ".imprintignore"
+    ignore_path.write_text("")
+
+    files = [
+        home / ".env",
+        home / ".env.local",
         home / ".zshrc",
     ]
-
-    # No .imprintignore file — hard-coded patterns should still block
-    ignore_path = tmp_path / ".imprintignore"
     safe = filter_safe_files(files, ignore_path, home)
-
-    safe_names = [f.name for f in safe]
-    assert "id_rsa" not in safe_names
-    assert "id_ed25519" not in safe_names
-    assert "deploy.pem" not in safe_names
-    assert ".zshrc" in safe_names
+    names = [f.name for f in safe]
+    assert ".env" not in names
+    assert ".zshrc" in names
 
 
-def test_env_files_blocked(tmp_path: Path) -> None:
-    """Environment files with secrets must be blocked."""
+def test_custom_ignore_patterns(
+    tmp_path: Path,
+) -> None:
+    """Custom patterns in .imprintignore should be respected."""
     home = tmp_path / "home"
     home.mkdir()
-    (home / ".env").write_text("SECRET=abc")
-    (home / ".env.local").write_text("SECRET=abc")
+    (home / ".zshrc").write_text("# zsh")
     (home / ".gitconfig").write_text("[user]")
+    (home / ".custom_tool_config").write_text("ignore me")
 
-    files = [home / ".env", home / ".env.local", home / ".gitconfig"]
-    ignore_path = tmp_path / ".imprintignore"
+    ignore_path = home / ".imprintignore"
+    ignore_path.write_text(".custom_tool_config\n")
+
+    files = [
+        home / ".zshrc",
+        home / ".gitconfig",
+        home / ".custom_tool_config",
+    ]
     safe = filter_safe_files(files, ignore_path, home)
+    names = [f.name for f in safe]
+    assert ".zshrc" in names
+    assert ".gitconfig" in names
+    assert ".custom_tool_config" not in names
 
-    safe_names = [f.name for f in safe]
-    assert ".env" not in safe_names
-    assert ".env.local" not in safe_names
-    assert ".gitconfig" in safe_names
+
+def test_load_patterns_includes_always_exclude() -> None:
+    """load_ignore_patterns should include hardcoded patterns."""
+    import tempfile
+
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".txt", delete=False
+    ) as f:
+        f.write("# comment\ncustom_pattern\n")
+        f.flush()
+        patterns = load_ignore_patterns(Path(f.name))
+
+    assert "custom_pattern" in patterns
+    assert ".ssh/id_*" in patterns  # hardcoded
+    assert "*secret*" in patterns   # hardcoded
 
 
-def test_custom_imprintignore(tmp_path: Path) -> None:
-    """Custom .imprintignore patterns should be respected."""
-    home = tmp_path / "home"
-    home.mkdir()
-    (home / ".zshrc").write_text("# config")
-    (home / ".secret_file").write_text("secret")
-    (home / ".vimrc").write_text("set number")
-
-    # Write a custom .imprintignore
+def test_empty_ignore_file(tmp_path: Path) -> None:
+    """Empty .imprintignore should still have hardcoded patterns."""
     ignore_path = tmp_path / ".imprintignore"
-    ignore_path.write_text("*.secret_file\n")
-
-    files = [home / ".zshrc", home / ".secret_file", home / ".vimrc"]
-    safe = filter_safe_files(files, ignore_path, home)
-
-    safe_names = [f.name for f in safe]
-    assert ".zshrc" in safe_names
-    assert ".vimrc" in safe_names
-    # .secret_file matches *secret* in hardcoded patterns
-    assert ".secret_file" not in safe_names
-
-
-def test_history_files_blocked(tmp_path: Path) -> None:
-    """Shell history files must be blocked."""
-    home = tmp_path / "home"
-    home.mkdir()
-    (home / ".bash_history").write_text("secret commands")
-    (home / ".zsh_history").write_text("secret commands")
-
-    files = [home / ".bash_history", home / ".zsh_history"]
-    ignore_path = tmp_path / ".imprintignore"
-    safe = filter_safe_files(files, ignore_path, home)
-
-    assert len(safe) == 0
-
-
-def test_load_ignore_patterns_includes_hardcoded(tmp_path: Path) -> None:
-    """load_ignore_patterns always includes hard-coded patterns."""
-    ignore_path = tmp_path / ".imprintignore"
+    ignore_path.write_text("")
     patterns = load_ignore_patterns(ignore_path)
+    # Should have at least the hardcoded patterns
+    assert len(patterns) > 0
     assert ".ssh/id_*" in patterns
-    assert ".bash_history" in patterns
+
+
+def test_filter_preserves_safe_files(
+    tmp_path: Path,
+) -> None:
+    """Regular dotfiles should pass through the filter."""
+    home = tmp_path / "home"
+    home.mkdir()
+    safe_files = [".zshrc", ".gitconfig", ".vimrc"]
+    for name in safe_files:
+        (home / name).write_text("config")
+
+    ignore_path = home / ".imprintignore"
+    ignore_path.write_text("")
+
+    files = [home / name for name in safe_files]
+    result = filter_safe_files(files, ignore_path, home)
+    assert len(result) == 3

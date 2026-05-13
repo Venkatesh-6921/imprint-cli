@@ -1,9 +1,15 @@
 """Tests for collectors — mock subprocess calls."""
 
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-from imprint.collectors import system, dotfiles, git_config, scripts, shell
+from imprint.collectors import (
+    dotfiles,
+    git_config,
+    scripts,
+    shell,
+    system,
+)
 
 
 def test_system_collect_python_version() -> None:
@@ -15,7 +21,10 @@ def test_system_collect_python_version() -> None:
 
 def test_system_collect_with_missing_tools() -> None:
     """Missing tools (node, git) should return None, not crash."""
-    with patch("subprocess.check_output", side_effect=FileNotFoundError):
+    with patch(
+        "subprocess.check_output",
+        side_effect=FileNotFoundError,
+    ):
         result = system.collect()
     # Python version uses platform.python_version(), not subprocess
     assert result["python_version"] is not None
@@ -68,6 +77,8 @@ def test_scripts_no_bin_dir(tmp_path: Path) -> None:
 
 def test_git_config_collect_mocked() -> None:
     """Git config collector reads git config values."""
+    import subprocess
+
     def mock_check_output(cmd, **kwargs):
         key = cmd[-1]
         values = {
@@ -81,8 +92,10 @@ def test_git_config_collect_mocked() -> None:
             return values[key]
         raise subprocess.CalledProcessError(1, cmd)
 
-    import subprocess
-    with patch("subprocess.check_output", side_effect=mock_check_output):
+    with patch(
+        "subprocess.check_output",
+        side_effect=mock_check_output,
+    ):
         result = git_config.collect()
 
     assert result["user_name"] == "Test User"
@@ -95,7 +108,7 @@ def test_shell_collect_zsh(tmp_path: Path) -> None:
     """Shell collector detects zsh config from .zshrc content."""
     home = tmp_path / "home"
     home.mkdir()
-    zshrc_content = '''
+    zshrc_content = '''\
 ZSH_THEME="robbyrussell"
 plugins=(git docker python)
 alias ll="ls -la"
@@ -104,8 +117,16 @@ function deploy() { echo "deploying"; }
 '''
     (home / ".zshrc").write_text(zshrc_content)
 
-    with patch("imprint.collectors.shell._detect_shell", return_value="zsh"), \
-         patch("imprint.collectors.shell._get_shell_version", return_value="5.9"):
+    with (
+        patch(
+            "imprint.collectors.shell._detect_shell",
+            return_value="zsh",
+        ),
+        patch(
+            "imprint.collectors.shell._get_shell_version",
+            return_value="5.9",
+        ),
+    ):
         result = shell.collect(home)
 
     assert result["type"] == "zsh"

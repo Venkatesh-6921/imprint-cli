@@ -5,7 +5,6 @@ Copies scripts to ~/bin/ and makes them executable.
 
 from __future__ import annotations
 
-import os
 import platform
 import shutil
 import stat
