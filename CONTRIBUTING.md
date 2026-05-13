@@ -1,157 +1,132 @@
-# Contributing to imprint-cli
+# Contributing to Imprint CLI
 
-Thanks for helping make imprint-cli better! Here's everything you need.
+First off, thanks for taking the time to contribute to **Imprint**! 🎉
 
----
-
-## Ways to contribute
-
-- **Add a new collector** — support a tool we don't capture yet (e.g., Docker, Zellij, Starship)
-- **Improve an existing collector** — better parsing, more data, edge case handling
-- **Fix a bug** — something doesn't snapshot or restore correctly
-- **Add an installer** — restore support for a new collector
-- **Improve the UI** — better Rich output, new themes, dashboard enhancements
-- **Write tests** — increase coverage for collectors, config, and CLI
-- **Documentation** — fix typos, improve README, add examples
+Imprint v3 is a massive upgrade focused on a full TUI dashboard, modular collectors/installers, and secure snapshotting. We welcome contributions of all kinds—from bug fixes and new collectors to documentation improvements.
 
 ---
 
-## Development setup
+## Architecture Overview
+
+Imprint is built around a modular architecture:
+- **CLI / TUI (`imprint/cli.py` & `imprint/utils/display.py`)**: The user interface. Uses `click` for CLI and `textual` for the TUI dashboard.
+- **Collectors (`imprint/collectors/`)**: Extract configuration from the user's environment.
+- **Installers (`imprint/installers/`)**: Apply a snapshot back to a new environment.
+- **Config & Manifest (`imprint/config.py`, `imprint/manifest.py`)**: Manage profiles and structure the snapshot data.
+- **Security (`imprint/crypto.py`, `imprint/utils/safety.py`)**: Ensure sensitive data is never captured in plaintext.
+
+---
+
+## Development Setup
+
+We use `uv` for lightning-fast dependency management and `hatchling` as our build backend.
 
 ```bash
-# Clone and set up
-git clone https://github.com/Venkatesh-6921/imprint-cli
+# 1. Clone your fork
+git clone https://github.com/YOUR_USERNAME/imprint-cli.git
 cd imprint-cli
 
-# Create virtual environment with uv
-uv sync --extra dev
+# 2. Create virtual environment and install dependencies with uv
+# This installs all extras (dev, crypto, watch)
+uv sync --extra dev --extra full
 
-# Verify everything works
+# 3. Run the CLI in development mode
+uv run imp --help
+
+# 4. Verify formatting and tests pass
 uv run ruff check .
 uv run pytest tests/ -v
 ```
 
-> **Note:** We use `uv` for package management. Do NOT use bare `pip` or `requirements.txt`.
+> **Note:** Do not use `pip` or generate `requirements.txt`. Always use `uv`.
 
 ---
 
-## Git workflow
+## Git Workflow (Branch Protection)
 
-> **⚠️ Direct pushes to `main` are not allowed.** All changes go through pull requests.
+> ⚠️ **Direct pushes to `main` are blocked.** All changes must go through a Pull Request.
 
-### For every change — no matter how small:
+1. Create a branch for your feature or fix: `git checkout -b feat/your-feature-name`
+2. Commit your changes with descriptive messages: `git commit -m "feat: add support for ghostty terminal"`
+3. Push to your fork: `git push origin feat/your-feature-name`
+4. Open a **Pull Request** against the `main` branch of the `Venkatesh-6921/imprint-cli` repository.
 
-```bash
-# 1. Create a branch from latest main
-git checkout main && git pull
-git checkout -b fix/short-description     # or feat/, docs/, refactor/
-
-# 2. Make your changes, then validate
-uv run ruff check .
-uv run pytest tests/ -v
-
-# 3. Commit
-git add -A
-git commit -m "fix: what you changed and why"
-
-# 4. Push your branch (never main)
-git push origin fix/short-description
-
-# 5. Open a Pull Request on GitHub
-```
-
-### Branch naming
-
-| Prefix | Use for |
-|---|---|
-| `fix/` | Bug fixes |
-| `feat/` | New features or collectors |
-| `docs/` | Documentation only |
-| `refactor/` | Code restructuring (no behavior change) |
-| `test/` | Adding or improving tests |
-
-### Releases (maintainers only)
-
-Version bumps and PyPI releases happen via tags on `main`:
-
-```bash
-# After merging PRs, on main:
-git tag v3.x.x
-git push origin main --tags    # triggers OIDC PyPI publish via CI
-```
+### Branch Naming Conventions
+- `feat/...` for new features or collectors
+- `fix/...` for bug fixes
+- `docs/...` for documentation updates
+- `refactor/...` for structural code changes
+- `test/...` for adding tests
 
 ---
 
-## Adding a new collector
+## Adding a New Collector & Installer
 
-1. Create `imprint/collectors/your_tool.py`:
+We are always looking to support more developer tools!
 
+### 1. The Collector
+Create `imprint/collectors/your_tool.py`:
 ```python
-"""Collect YourTool configuration."""
-
-from __future__ import annotations
-
 from pathlib import Path
 
-
 def collect(home_dir: Path) -> dict:
-    """Collect YourTool config data.
-
-    Args:
-        home_dir: User home directory.
-
-    Returns:
-        Dict with tool configuration data.
-    """
+    """Collect tool configuration data."""
     config_path = home_dir / ".config" / "yourtool" / "config"
     if not config_path.exists():
         return {}
+    
+    return {"version": "1.0", "plugins": []}
+```
+*Remember to route all file paths through `filter_safe_files()` from `utils/safety.py` to prevent capturing secrets.*
 
-    # Parse and return relevant data
-    return {
-        "version": "...",
-        "plugins": [...],
-    }
+### 2. The Installer
+Create `imprint/installers/your_tool.py`:
+```python
+from pathlib import Path
+
+def install(data: dict, home_dir: Path) -> None:
+    """Restore tool configuration data."""
+    if not data:
+        return
+    # write config safely
 ```
 
-2. Add it to `imprint/snapshot.py` collector imports and collection logic.
-3. Add the section to `imprint/manifest.py` dataclass fields.
-4. Write tests in `tests/test_collectors.py`.
-5. Update `CHANGELOG.md` under `[Unreleased]`.
+### 3. Wiring it up
+- Add your collector to `imprint/snapshot.py` and installer to `imprint/restore.py`.
+- Update the dataclass in `imprint/manifest.py`.
+- Add tests in `tests/test_collectors.py` and `tests/test_restore.py`.
+- Mention it in `CHANGELOG.md` under `[Unreleased]`.
 
 ---
 
-## Code style
+## Code Style & Standards
 
-- **Python 3.11+** — use modern syntax (match/case, `X | Y` unions, etc.)
-- **Linter:** `ruff` with rules `E, F, I, N, W, UP` — line length 100
-- **Dependencies:** `click`, `rich`, `textual`, `gitpython`, `pyyaml`, `tomli_w` — keep it minimal
-- **Separation:** Collectors read data, installers apply data, CLI orchestrates
-- **Security:** NEVER capture secrets, keys, or passwords. Always route through `safety.py`
+- **Python 3.11+**: We rely on modern Python features (like `match/case` and modern type hinting like `list[str]`).
+- **Formatting & Linting**: We use `ruff`. Line length is set to 100 characters.
+- **Dependencies**: Keep them minimal. Currently relying on `click`, `rich`, `textual`, `gitpython`, `pyyaml`, and `tomli_w`.
 
 ---
 
-## Security guidelines
+## Security Guidelines
 
-When adding a new collector, ensure:
-
-- ❌ No SSH private keys, API tokens, or passwords are ever captured
-- ❌ No `shell=True` in subprocess calls
-- ❌ No `eval()` or `exec()` on user data
-- ✅ All file paths go through `filter_safe_files()` from `utils/safety.py`
-- ✅ Sensitive data patterns are in `.imprintignore.default`
+Imprint deals with user environments, which often contain highly sensitive data.
+- ❌ **NEVER** capture SSH private keys, API tokens, passwords, or `.env` files.
+- ❌ **NO** `shell=True` when making subprocess calls.
+- ✅ **ALWAYS** use `imprint.utils.safety` functions to sanitize paths and files.
 
 ---
 
-## Reporting a bug
+## Releases (Maintainers Only)
 
-Open an issue with:
-- Your OS and Python version
-- The command you ran and the full error traceback
-- Output of `imp doctor` if possible
+Our CI/CD pipeline automates PyPI publishing via GitHub OIDC.
+When ready to release:
+1. Update `__version__` in `imprint/__init__.py`.
+2. Update `CHANGELOG.md` with the new version section.
+3. Merge everything to `main`.
+4. Tag and push:
+   ```bash
+   git tag v3.1.0
+   git push origin main --tags
+   ```
 
----
-
-## License
-
-By contributing, you agree your changes are licensed under MIT.
+Thanks again for contributing!

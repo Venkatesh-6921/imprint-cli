@@ -403,6 +403,7 @@ def status(profile: str | None) -> None:
 def doctor(profile: str | None) -> None:
     """Health check — validates config, git, GitHub, and dependencies."""
     import importlib
+    import importlib.util
     import shutil as sh
     import subprocess
 
