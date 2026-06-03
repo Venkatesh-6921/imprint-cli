@@ -39,7 +39,7 @@ jobs:
         run: uv run pytest tests/ --cov=imprint --cov-report=xml -v
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v6
         with:
           file: coverage.xml
           fail_ci_if_error: false
